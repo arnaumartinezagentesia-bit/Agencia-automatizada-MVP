@@ -593,8 +593,7 @@ The internal normalized market data must define:
 * source;
 * source mode;
 * bars/observations;
-* provider metadata;
-* data quality information.
+* provider metadata.
 
 All timestamps must be stored in UTC.
 
