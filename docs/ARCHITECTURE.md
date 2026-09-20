@@ -309,8 +309,8 @@ MarketSnapshot
 MarketAnalysis
 AnalysisStatus
 AnalysisRequest
-ProviderMetadata
-AnalysisError
+DataSource
+ErrorDetail
 ```
 
 Domain models must not import FastAPI, Phaser, OpenRouter clients or database-specific code.
@@ -490,6 +490,17 @@ running
 completed        failed
 ```
 
+The backend persists the following lifecycle states:
+
+```text
+pending
+running
+completed
+failed
+```
+
+`pending` and `running` are backend states. `idle` and `submitting` are frontend-only states and must not appear in the API or persistence contracts.
+
 The frontend must never skip directly from:
 
 ```text
@@ -557,6 +568,18 @@ agent
 ```
 
 The agent must never need to know how the vendor names candles, symbols or timestamps internally.
+
+### 11.3 Data mode and provider configuration
+
+The `AnalysisRequest.data_mode` field (`fixture` | `live`) expresses the requested execution mode.
+
+Environment configuration (e.g., `MARKET_DATA_PROVIDER`, provider credentials) determines which providers/modes are available and configured.
+
+The requested `data_mode` must not be silently overridden by environment configuration.
+
+If the requested mode is unavailable or not configured, the backend must return an explicit provider/configuration failure (e.g., `PROVIDER_ERROR` or `CONFIGURATION_ERROR`).
+
+The backend must never silently substitute `fixture` data when `live` was requested.
 
 ---
 
@@ -668,35 +691,39 @@ The canonical MVP-0 execution flow is:
 
 ```text
 1. User requests XAU/USD analysis
-        ↓
+       ↓
 2. API validates request
-        ↓
+       ↓
 3. Application creates analysis record
+       ↓
+4. status = pending
+       ↓
+5. execution begins
+       ↓
+6. status = running
+       ↓
+7. emit analysis.started
+       ↓
+8. MarketDataProvider obtains snapshot
+       ↓
+9. snapshot is validated
+       ↓
+10. Market Intelligence Agent receives snapshot
         ↓
-4. status = running
+11. LLMProvider generates structured output
         ↓
-5. emit analysis.started
+12. output is validated
         ↓
-6. MarketDataProvider obtains snapshot
+13. analysis is persisted atomically
         ↓
-7. snapshot is validated
+14. status = completed
         ↓
-8. Market Intelligence Agent receives snapshot
+15. emit analysis.completed
         ↓
-9. LLMProvider generates structured output
-        ↓
-10. output is validated
-        ↓
-11. analysis is persisted
-        ↓
-12. status = completed
-        ↓
-13. emit analysis.completed
-        ↓
-14. API returns result
+16. API returns successful result
 ```
 
-Failure at any step must produce:
+Failure at any step after execution begins must produce:
 
 ```text
 status = failed
@@ -740,7 +767,7 @@ At MVP-0 this is expected to include:
 
 * symbol;
 * timeframe;
-* data mode.
+* data_mode.
 
 The server validates allowed values.
 
@@ -779,7 +806,6 @@ Examples:
 ```text
 400 → invalid request
 404 → analysis not found
-409 → conflicting/idempotency condition
 422 → validation failure where appropriate
 502/503 → upstream provider/service unavailable
 500 → unexpected internal failure
@@ -898,19 +924,25 @@ The exact schema belongs in the implementation and is constrained by `DATA_CONTR
 
 ## 23. Persistence lifecycle
 
-When an analysis begins:
+When an analysis record is created:
+
+```text
+analysis_runs.status = pending
+```
+
+When execution begins:
 
 ```text
 analysis_runs.status = running
 ```
 
-When successful:
+When successful commit:
 
 ```text
 analysis_runs.status = completed
 ```
 
-When unsuccessful:
+When failure:
 
 ```text
 analysis_runs.status = failed
@@ -919,6 +951,8 @@ analysis_runs.status = failed
 A failed record may retain diagnostic information.
 
 It must never contain a fake successful result.
+
+A `completed` state must never be exposed before the corresponding analysis result has been committed successfully.
 
 ---
 
@@ -934,13 +968,15 @@ completed
 
 before the corresponding persistent result has been committed successfully.
 
+A failed analysis is represented through the API error contract rather than as a successful `201` response. The HTTP response status reflects the authoritative persisted outcome.
+
 ---
 
 ## 25. Current MVP execution model
 
 MVP-0 does not require a distributed worker system.
 
-The initial execution can occur inside the FastAPI application process.
+MVP-0 uses synchronous execution inside the FastAPI application process. The `POST /api/v1/market-analyses` request returns only after the analysis has completed or failed. The WebSocket may emit lifecycle notifications during execution, but WebSocket delivery is not guaranteed and is not the source of truth. The final HTTP response reflects the authoritative persisted state.
 
 This is intentionally a development-scale execution model.
 
@@ -997,7 +1033,6 @@ OPENROUTER_API_KEY
 
 MARKET_DATA_PROVIDER
 MARKET_DATA_API_KEY
-MARKET_DATA_MODE
 ```
 
 Secret values must only exist in:
