@@ -59,7 +59,7 @@ The agent MUST NOT:
 * Control WebSocket emission or lifecycle events
 * Select or override the market data provider
 * Modify system state directly (analysis status, timestamps, identifiers)
-* Produce `MarketAnalysis` fields that are authoritative backend concerns (`analysis_id`, `timestamp_utc`, `schema_version`, `model_metadata`, lifecycle fields)
+* Produce `MarketAnalysis` fields that are authoritative backend concerns (`analysis_id`, `timestamp_utc`, `schema_version`, `market_snapshot`, `model_metadata`, `data_sources`, lifecycle/status fields)
 
 ---
 
@@ -102,7 +102,29 @@ The agent MUST NOT attempt to repair invalid data. Invalid provider data results
 
 The agent produces a candidate structured output that, after application-layer validation and enrichment, becomes a `MarketAnalysis` per `DATA_CONTRACTS.md` §9.
 
-### 7.1 Agent Output vs Authoritative Contract
+### 7.1 Candidate Output Shape
+
+The agent candidate output contains exactly these interpretive fields:
+
+* `trend_context`
+* `volatility_context`
+* `key_levels`
+* `market_observations`
+* `uncertainties`
+
+These are **candidate values only**. The candidate output does **NOT** contain authoritative backend fields such as:
+
+* `analysis_id`
+* `timestamp_utc`
+* `schema_version`
+* `market_snapshot`
+* `model_metadata`
+* `data_sources`
+* lifecycle/status fields
+
+The Application Layer validates the candidate output and constructs the authoritative `MarketAnalysis`.
+
+### 7.2 Agent Output vs Authoritative Contract
 
 | Concern | Agent (LLM) | Application Layer (Backend) |
 |---------|-------------|----------------------------|
@@ -129,7 +151,7 @@ The agent MAY interpret the following from the supplied snapshot:
 * **Relevant price levels**: Support/resistance observations with price and description
 * **Market observations**: Concise qualitative observations grounded in the snapshot
 * **Uncertainties**: Explicit limitations, ambiguous conditions, data gaps
-* **Provenance awareness**: The analysis references the data source mode (`fixture | live`) implicitly via the attached snapshot
+* **Provenance awareness**: The agent receives `MarketSnapshot.data_source` as input context; it may be aware of the data source mode/provenance; it does not generate, modify, or own provenance fields; the Application Layer remains responsible for `MarketAnalysis.data_sources`.
 
 `unclear` is a VALID analytical result when evidence is insufficient. The agent MUST NOT transform ambiguity into a fabricated directional call.
 
@@ -167,6 +189,13 @@ The agent organizes its interpretation conceptually around these steps (not a tr
 6. **Supporting observations**: Concise qualitative statements grounded in data
 7. **Uncertainties**: Explicit limitations, data gaps, ambiguous signals
 
+These seven steps are **conceptual guidance only**. The methodology is:
+
+* **Not a deterministic trading algorithm**
+* **Not a required implementation sequence**
+* **Not a requirement to expose or persist private reasoning traces**
+* **Not a chain-of-thought requirement**
+
 No arbitrary mathematical rules, multipliers, thresholds, or trading heuristics are introduced. The objective is structured reasoning, not signal generation.
 
 ---
@@ -202,7 +231,7 @@ The Market Intelligence Agent prompt MUST specify:
 
 * **Input context**: Exact structure of `MarketSnapshot` and `DataSource` received
 * **Task**: Produce qualitative interpretation per the analytical scope (§8)
-* **Output contract**: Exact `MarketAnalysis` structure (interpretive fields only)
+* **Output contract**: Exact candidate output shape defined in §7.1, containing only the interpretive fields required to construct `MarketAnalysis`
 * **Out of scope**: Trading instructions, BUY/SELL, orders, risk, execution, broker actions
 * **Grounding requirement**: All assertions must trace to supplied snapshot data
 * **Uncertainty declaration**: Use `unclear` and `uncertainties` when evidence is insufficient
@@ -262,9 +291,15 @@ The agent MUST NOT convert legitimate analytical uncertainty into a system error
 | Forbidden content in LLM output | `ANALYSIS_VALIDATION_ERROR` | `analysis.failed`, no `MarketAnalysis` |
 | Market data provider unavailable | `PROVIDER_ERROR` / `CONFIGURATION_ERROR` | Fails before agent invocation |
 | Provider returns invalid data | `PROVIDER_ERROR` | Fails before agent invocation |
-| Persistence failure | `PERSISTENCE_ERROR` | Execution fails; `analysis.failed` if persistence is available to record the failure state |
+| Persistence failure | `PERSISTENCE_ERROR` | Handled by the Application Layer per architecture/data contracts |
 
 Error codes per `DATA_CONTRACTS.md` §13.
+
+The agent does not:
+* persist failure state;
+* retry persistence;
+* control lifecycle recovery;
+* decide how persistence outages are handled.
 
 ---
 
@@ -356,7 +391,7 @@ The `Application` layer (use case `CreateMarketAnalysis`) controls the lifecycle
 * [ ] Responsibilities are explicit and limited to qualitative interpretation
 * [ ] Non-responsibilities explicitly exclude all trading/execution/risk concerns
 * [ ] Input contract is compatible with `DATA_CONTRACTS.md` (`MarketSnapshot`, `DataSource`, `AnalysisRequest`)
-* [ ] Output contract references exact `MarketAnalysis` structure from `DATA_CONTRACTS.md` §9
+* [ ] Output contract defines the exact candidate output shape and its mapping to `MarketAnalysis` from `DATA_CONTRACTS.md` §9
 * [ ] Grounding rules require traceability to supplied snapshot
 * [ ] Uncertainty behavior defines `unclear` usage and `uncertainties` field
 * [ ] Forbidden output behavior maps to `ANALYSIS_VALIDATION_ERROR`
