@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
 
 # Python caches and virtual environments
 __pycache__/
@@ -31,6 +33,7 @@ out/
 build/
 dist/
 *.tsbuildinfo
+frontend/next-env.d.ts
 
 # Test/cache artifacts
 .coverage
