@@ -79,3 +79,7 @@ temp/
 # Environment backup files (just in case)
 .env.backup
 .env.example.bak
+
+# Obsidian local configuration (vault is the repository root)
+knowledge/.obsidian/
+.obsidian/
