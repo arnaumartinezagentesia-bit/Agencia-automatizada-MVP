@@ -33,13 +33,14 @@ Orden de autoridad:
 Añade cada nota nueva en su sección, con enlace (wikilink), estado y una línea de resumen.
 
 ### Decisiones
-_Ninguna todavía._
+- [[2026-10-23_error-details-sin-salida-cruda-del-llm]] — `PROPOSED`, pendiente para la Fase 7: `error.details` no debe almacenar la salida cruda del LLM; sin implementar ni probar.
 
 ### Soluciones verificadas
 _Ninguna todavía._
 
 ### Incidentes
-_Ninguno todavía._
+- [[2026-10-22-alembic-naming-convention-duplicated-prefix]] — `PROPOSED`, resuelto: prefijo `ck_` duplicado en migraciones con `naming_convention`.
+- [[2026-10-22-contextmanager-keeps-original-exception-as-context]] — `PROPOSED`, resuelto: `__context__` conserva la excepción SQL original.
 
 ### Experimentos
 _Ninguno todavía._
@@ -48,7 +49,9 @@ _Ninguno todavía._
 _Ninguno todavía._
 
 ### Changelog
-_Sin entradas todavía._ Ver [`../06_CHANGELOG/`](../06_CHANGELOG/).
+- [[2026-10-23_alta-decision-error-details-sin-salida-cruda-del-llm]] — `PROPOSED`, alta de la decisión pendiente para la Fase 7 sobre `error.details`.
+
+Ver [`../06_CHANGELOG/`](../06_CHANGELOG/).
 
 ## Plantillas
 
